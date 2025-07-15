@@ -167,8 +167,13 @@ class ShipTracker:
         }
     
     def parse_vesselfinder_data(self, data):
-        """Parse VesselFinder API response"""
+        """Parse VesselFinder data (both API and HTML scraping)"""
         try:
+            # If it's HTML scraping data, return as-is (already parsed)
+            if isinstance(data, dict) and not data.get('vessel'):
+                return data
+            
+            # If it's API data, parse the vessel structure
             vessel = data.get('vessel', {})
             return {
                 'ship_name': vessel.get('name', self.ship_name),

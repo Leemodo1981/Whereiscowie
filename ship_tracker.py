@@ -76,51 +76,66 @@ class ShipTracker:
                 'error': False
             }
             
-            # Try to find current position text
-            position_text = soup.find('div', class_='vessel-position')
-            if position_text:
-                text = position_text.get_text()
+            # Extract data from the page text content
+            text_content = soup.get_text()
+            
+            # More robust pattern matching for vessel information
+            # Extract speed and course from "sailing at X knots" pattern
+            speed_course_match = re.search(r'sailing at a speed of ([\d.]+) knots.*?course.*?([\d.]+)°', text_content, re.IGNORECASE | re.DOTALL)
+            if speed_course_match:
+                data['speed'] = float(speed_course_match.group(1))
+                data['course'] = float(speed_course_match.group(2))
+            else:
+                # Try alternative patterns
+                speed_match = re.search(r'([\d.]+)\s*knots?', text_content, re.IGNORECASE)
+                if speed_match:
+                    data['speed'] = float(speed_match.group(1))
                 
-                # Extract coordinates using regex
-                lat_match = re.search(r'(\d+\.?\d*)[°\s]*([NS])', text)
-                lon_match = re.search(r'(\d+\.?\d*)[°\s]*([EW])', text)
+                course_match = re.search(r'course[:\s]*([\d.]+)[°\s]', text_content, re.IGNORECASE)
+                if course_match:
+                    data['course'] = float(course_match.group(1))
+            
+            # Extract destination and ETA
+            dest_eta_match = re.search(r'en route to.*?([^,\n]+).*?expected to arrive.*?on\s*([^.\n]+)', text_content, re.IGNORECASE | re.DOTALL)
+            if dest_eta_match:
+                data['destination'] = dest_eta_match.group(1).strip()
+                data['eta'] = dest_eta_match.group(2).strip()
+            else:
+                # Try alternative patterns
+                dest_match = re.search(r'destination[:\s]*([^<\n,]+)', text_content, re.IGNORECASE)
+                if dest_match:
+                    data['destination'] = dest_match.group(1).strip()
                 
-                if lat_match and lon_match:
-                    lat = float(lat_match.group(1))
-                    if lat_match.group(2) == 'S':
-                        lat = -lat
-                    
-                    lon = float(lon_match.group(1))
-                    if lon_match.group(2) == 'W':
-                        lon = -lon
-                    
-                    data['latitude'] = lat
-                    data['longitude'] = lon
+                eta_match = re.search(r'ETA[:\s]*([^<\n,]+)', text_content, re.IGNORECASE)
+                if eta_match:
+                    data['eta'] = eta_match.group(1).strip()
             
-            # Extract speed
-            speed_match = re.search(r'(\d+\.?\d*)\s*knots?', html, re.IGNORECASE)
-            if speed_match:
-                data['speed'] = float(speed_match.group(1))
-            
-            # Extract course
-            course_match = re.search(r'Course[:\s]*(\d+\.?\d*)[°\s]', html, re.IGNORECASE)
-            if course_match:
-                data['course'] = float(course_match.group(1))
-            
-            # Extract destination
-            dest_match = re.search(r'destination[:\s]*([^<\n,]+)', html, re.IGNORECASE)
-            if dest_match:
-                data['destination'] = dest_match.group(1).strip()
-            
-            # Extract ETA
-            eta_match = re.search(r'ETA[:\s]*([^<\n,]+)', html, re.IGNORECASE)
-            if eta_match:
-                data['eta'] = eta_match.group(1).strip()
-                
             # Extract navigation status
-            status_match = re.search(r'Navigation Status[:\s]*([^<\n,]+)', html, re.IGNORECASE)
-            if status_match:
-                data['status'] = status_match.group(1).strip()
+            status_patterns = [
+                r'Navigation Status[:\s]*([^<\n,]+)',
+                r'Status[:\s]*([^<\n,]+)',
+                r'Under way|At anchor|Moored|Not under command',
+            ]
+            
+            for pattern in status_patterns:
+                status_match = re.search(pattern, text_content, re.IGNORECASE)
+                if status_match:
+                    data['status'] = status_match.group(0).strip()
+                    break
+            
+            # Extract position coordinates
+            pos_match = re.search(r'position.*?is.*?at\s*([\d.]+)[°\s]*([NS])[,\s]*([\d.]+)[°\s]*([EW])', text_content, re.IGNORECASE)
+            if pos_match:
+                lat = float(pos_match.group(1))
+                if pos_match.group(2).upper() == 'S':
+                    lat = -lat
+                
+                lon = float(pos_match.group(3))
+                if pos_match.group(4).upper() == 'W':
+                    lon = -lon
+                
+                data['latitude'] = lat
+                data['longitude'] = lon
             
             return data
             

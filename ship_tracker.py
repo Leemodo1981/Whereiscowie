@@ -115,10 +115,35 @@ class ShipTracker:
             if data.get('speed') and data.get('destination'):
                 data['status'] = 'Under way'
             
-            # Extract course if available from tables
+            # Extract course and coordinates from the table data
             course_match = re.search(r'Course / Speed\s*([\d.]+)°', text_content, re.IGNORECASE)
             if course_match:
                 data['course'] = float(course_match.group(1))
+            
+            # Extract coordinates from latitude/longitude patterns in the page
+            # Look for patterns like "59.4237° N, 24.7536° E" or similar
+            coord_patterns = [
+                r'([\d.]+)°?\s*([NS])[,\s]+([\d.]+)°?\s*([EW])',
+                r'Latitude[:\s]*([\d.]+)[°\s]*([NS]).*?Longitude[:\s]*([\d.]+)[°\s]*([EW])',
+                r'Lat[:\s]*([\d.]+)[°\s]*([NS]).*?Lon[:\s]*([\d.]+)[°\s]*([EW])'
+            ]
+            
+            for pattern in coord_patterns:
+                coord_match = re.search(pattern, text_content, re.IGNORECASE | re.DOTALL)
+                if coord_match:
+                    lat = float(coord_match.group(1))
+                    lat_dir = coord_match.group(2).upper()
+                    lon = float(coord_match.group(3))
+                    lon_dir = coord_match.group(4).upper()
+                    
+                    if lat_dir == 'S':
+                        lat = -lat
+                    if lon_dir == 'W':
+                        lon = -lon
+                    
+                    data['latitude'] = lat
+                    data['longitude'] = lon
+                    break
             
             logger.info(f"Parsed ship data: speed={data.get('speed')}, dest={data.get('destination')}, eta={data.get('eta')}")
             return data
@@ -226,15 +251,16 @@ class ShipTracker:
             logger.error(f"Error parsing MarineTraffic data: {e}")
             return {'error': True, 'message': 'Error parsing vessel data'}
     
-    def format_coordinates(self, lat, lon):
+    def format_coordinates(self, lat, lon, location=None):
         """Format latitude and longitude for display"""
-        if lat is None or lon is None:
+        if lat is not None and lon is not None:
+            lat_dir = "N" if lat >= 0 else "S"
+            lon_dir = "E" if lon >= 0 else "W"
+            return f"{abs(lat):.4f}°{lat_dir}, {abs(lon):.4f}°{lon_dir}"
+        elif location:
+            return location
+        else:
             return "Unknown"
-        
-        lat_dir = "N" if lat >= 0 else "S"
-        lon_dir = "E" if lon >= 0 else "W"
-        
-        return f"{abs(lat):.4f}°{lat_dir}, {abs(lon):.4f}°{lon_dir}"
     
     def format_speed(self, speed):
         """Format speed for display"""
@@ -336,7 +362,8 @@ class ShipTracker:
         # Position information
         coordinates = self.format_coordinates(
             ship_data.get('latitude'), 
-            ship_data.get('longitude')
+            ship_data.get('longitude'),
+            ship_data.get('current_location')
         )
         
         embed.add_field(

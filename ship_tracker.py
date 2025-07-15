@@ -49,12 +49,21 @@ class ShipTracker:
             except Exception as e:
                 logger.error(f"Error fetching VesselFinder API data: {e}")
         
-        # Fallback to public page scraping
+        # Fallback to public page scraping with browser headers
         try:
             url = f"https://www.vesselfinder.com/vessels/details/{self.ship_imo}"
-            async with session.get(url) as response:
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.5',
+                'Accept-Encoding': 'gzip, deflate',
+                'Connection': 'keep-alive',
+                'Upgrade-Insecure-Requests': '1',
+            }
+            async with session.get(url, headers=headers) as response:
                 if response.status == 200:
                     html = await response.text()
+                    logger.info(f"Successfully fetched VesselFinder page for IMO {self.ship_imo}")
                     return self.parse_vesselfinder_html(html)
                 else:
                     logger.warning(f"VesselFinder website returned status {response.status}")
@@ -67,8 +76,9 @@ class ShipTracker:
         """Parse VesselFinder HTML page for ship data"""
         try:
             soup = BeautifulSoup(html, 'html.parser')
+            text_content = soup.get_text()
             
-            # Extract ship data from the HTML structure
+            # Extract ship data using the proven working patterns
             data = {
                 'ship_name': self.ship_name,
                 'imo': self.ship_imo,
@@ -76,67 +86,41 @@ class ShipTracker:
                 'error': False
             }
             
-            # Extract data from the page text content
-            text_content = soup.get_text()
+            # Extract speed - pattern: "sailing at a speed of 17.5 knots"
+            speed_match = re.search(r'sailing at a speed of ([\d.]+) knots', text_content, re.IGNORECASE)
+            if speed_match:
+                data['speed'] = float(speed_match.group(1))
             
-            # More robust pattern matching for vessel information
-            # Extract speed and course from "sailing at X knots" pattern
-            speed_course_match = re.search(r'sailing at a speed of ([\d.]+) knots.*?course.*?([\d.]+)°', text_content, re.IGNORECASE | re.DOTALL)
-            if speed_course_match:
-                data['speed'] = float(speed_course_match.group(1))
-                data['course'] = float(speed_course_match.group(2))
-            else:
-                # Try alternative patterns
-                speed_match = re.search(r'([\d.]+)\s*knots?', text_content, re.IGNORECASE)
-                if speed_match:
-                    data['speed'] = float(speed_match.group(1))
-                
-                course_match = re.search(r'course[:\s]*([\d.]+)[°\s]', text_content, re.IGNORECASE)
-                if course_match:
-                    data['course'] = float(course_match.group(1))
+            # Extract destination - pattern: "en route to the port of Riga, Latvia"
+            dest_match = re.search(r'en route to (?:the port of )?([^,\n]+)', text_content, re.IGNORECASE)
+            if dest_match:
+                data['destination'] = dest_match.group(1).strip()
             
-            # Extract destination and ETA
-            dest_eta_match = re.search(r'en route to.*?([^,\n]+).*?expected to arrive.*?on\s*([^.\n]+)', text_content, re.IGNORECASE | re.DOTALL)
-            if dest_eta_match:
-                data['destination'] = dest_eta_match.group(1).strip()
-                data['eta'] = dest_eta_match.group(2).strip()
-            else:
-                # Try alternative patterns
-                dest_match = re.search(r'destination[:\s]*([^<\n,]+)', text_content, re.IGNORECASE)
-                if dest_match:
-                    data['destination'] = dest_match.group(1).strip()
-                
-                eta_match = re.search(r'ETA[:\s]*([^<\n,]+)', text_content, re.IGNORECASE)
-                if eta_match:
-                    data['eta'] = eta_match.group(1).strip()
+            # Extract ETA - pattern: "expected to arrive there on Jul 16, 09:00"
+            eta_match = re.search(r'expected to arrive there on ([^.\n]+)', text_content, re.IGNORECASE)
+            if eta_match:
+                data['eta'] = eta_match.group(1).strip()
             
-            # Extract navigation status
-            status_patterns = [
-                r'Navigation Status[:\s]*([^<\n,]+)',
-                r'Status[:\s]*([^<\n,]+)',
-                r'Under way|At anchor|Moored|Not under command',
-            ]
+            # Extract current location - pattern: "at Baltic Sea reported"
+            location_match = re.search(r'position.*?is\s*at ([^r]+?) reported', text_content, re.IGNORECASE)
+            if location_match:
+                data['current_location'] = location_match.group(1).strip()
             
-            for pattern in status_patterns:
-                status_match = re.search(pattern, text_content, re.IGNORECASE)
-                if status_match:
-                    data['status'] = status_match.group(0).strip()
-                    break
+            # Extract last update time - pattern: "reported 1 min ago"
+            time_match = re.search(r'reported ([^b]+?) by AIS', text_content, re.IGNORECASE)
+            if time_match:
+                data['last_update'] = time_match.group(1).strip()
             
-            # Extract position coordinates
-            pos_match = re.search(r'position.*?is.*?at\s*([\d.]+)[°\s]*([NS])[,\s]*([\d.]+)[°\s]*([EW])', text_content, re.IGNORECASE)
-            if pos_match:
-                lat = float(pos_match.group(1))
-                if pos_match.group(2).upper() == 'S':
-                    lat = -lat
-                
-                lon = float(pos_match.group(3))
-                if pos_match.group(4).upper() == 'W':
-                    lon = -lon
-                
-                data['latitude'] = lat
-                data['longitude'] = lon
+            # Set status as "Under way" if we have speed and destination
+            if data.get('speed') and data.get('destination'):
+                data['status'] = 'Under way'
             
+            # Extract course if available from tables
+            course_match = re.search(r'Course / Speed\s*([\d.]+)°', text_content, re.IGNORECASE)
+            if course_match:
+                data['course'] = float(course_match.group(1))
+            
+            logger.info(f"Parsed ship data: speed={data.get('speed')}, dest={data.get('destination')}, eta={data.get('eta')}")
             return data
             
         except Exception as e:

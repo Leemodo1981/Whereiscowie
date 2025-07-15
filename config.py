@@ -18,7 +18,7 @@ class Config:
     
     # Bot configuration
     COMMAND_PREFIX = ['!', '/']
-    AUTO_UPDATE_TIMES = ['06:00', '12:00', '18:00']  # UTC times for scheduled updates
+    AUTO_UPDATE_TIMES = ['06:00', '12:00', '16:00']  # UTC times for scheduled updates
     RATE_LIMIT_SECONDS = 30
     
     # API endpoints

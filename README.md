@@ -7,7 +7,7 @@ A Discord bot that tracks the **Spirit of Adventure** cruise ship in real-time u
 - **Real-time tracking** of Spirit of Adventure cruise ship
 - **Current position**, speed, course, and destination
 - **ETA information** for next port
-- **Automatic scheduled updates** (06:00, 12:00, 18:00 UTC)
+- **Automatic scheduled updates** (06:00, 12:00, 16:00 UTC)
 - **Multiple data sources** with fallback support
 - **User-friendly commands** with rich Discord embeds
 - **Error handling** with informative messages

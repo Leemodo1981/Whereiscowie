@@ -62,9 +62,9 @@ class WhereIsCowieBot(commands.Bot):
             logger.error(f"Command error: {error}")
             await ctx.send("❌ An error occurred while processing your command.")
     
-    @tasks.loop(time=[time(6, 0), time(12, 0), time(18, 0)])
+    @tasks.loop(time=[time(6, 0), time(12, 0), time(16, 0)])
     async def periodic_update(self):
-        """Send periodic updates about the ship at 06:00, 12:00, and 18:00 UTC"""
+        """Send periodic updates about the ship at 06:00, 12:00, and 16:00 UTC"""
         if self.auto_update_channel:
             try:
                 embed = await self.ship_tracker.get_ship_status_embed()
@@ -115,7 +115,7 @@ async def setup_auto_updates(ctx):
     )
     embed.add_field(
         name="Update Schedule",
-        value="06:00, 12:00, 18:00 UTC daily",
+        value="06:00, 12:00, 16:00 UTC daily",
         inline=True
     )
     embed.add_field(
@@ -159,7 +159,7 @@ async def custom_help(ctx):
     
     embed.add_field(
         name="🔔 **!track** (Admin only)",
-        value="Enable automatic updates in this channel at 06:00, 12:00, 18:00 UTC",
+        value="Enable automatic updates in this channel at 06:00, 12:00, 16:00 UTC",
         inline=False
     )
     
@@ -208,7 +208,7 @@ async def bot_info(ctx):
     
     embed.add_field(
         name="🔄 Update Schedule",
-        value="• Manual: On-demand via commands\n• Auto: 06:00, 12:00, 18:00 UTC daily (if enabled)",
+        value="• Manual: On-demand via commands\n• Auto: 06:00, 12:00, 16:00 UTC daily (if enabled)",
         inline=False
     )
     

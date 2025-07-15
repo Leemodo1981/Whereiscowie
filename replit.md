@@ -57,7 +57,7 @@ The application uses a **service-oriented architecture** where the bot acts as t
 6. **User Response**: Rich embed with ship information sent to Discord channel
 
 ### Periodic Updates
-- **Trigger**: Scheduled task runs every 6 hours
+- **Trigger**: Scheduled task runs at 06:00, 12:00, and 16:00 UTC daily
 - **Process**: Automatic data fetch and update to configured channels
 - **Fallback**: Multiple API sources ensure data availability
 

@@ -58,8 +58,14 @@ The application uses a **service-oriented architecture** where the bot acts as t
 
 ### Periodic Updates
 - **Trigger**: Scheduled task runs at 06:00, 12:00, and 16:00 UTC daily
-- **Process**: Automatic data fetch and update to configured channels
-- **Fallback**: Multiple API sources ensure data availability
+- **Process**: Automatic data fetch via web scraping and update to configured channels
+- **Data Source**: VesselFinder website scraping (no API keys required)
+
+## Recent Changes (July 15, 2025)
+- Implemented web scraping functionality to extract real ship data from VesselFinder
+- Removed duplicate workflows causing "Data Unavailable" errors
+- Successfully extracting: speed, destination, ETA, current location (Baltic Sea)
+- Bot now provides real-time tracking data without requiring paid API keys
 
 ## External Dependencies
 

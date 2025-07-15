@@ -173,17 +173,12 @@ class ShipTracker:
     
     async def fetch_ais_data(self):
         """Fetch AIS data from multiple sources with fallback"""
-        # Try VesselFinder first
+        # Try VesselFinder first (web scraping works, no need for API fallback)
         data = await self.fetch_vesselfinder_data()
-        if data:
+        if data and not data.get('error'):
             return self.parse_vesselfinder_data(data)
         
-        # Fallback to MarineTraffic
-        data = await self.fetch_marinetraffic_data()
-        if data:
-            return self.parse_marinetraffic_data(data)
-        
-        # If all APIs fail, return mock data structure with error flag
+        # Only show error if web scraping completely failed
         return {
             'error': True,
             'message': 'Unable to fetch real-time data from vessel tracking services',

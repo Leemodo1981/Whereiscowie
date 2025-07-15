@@ -4,6 +4,8 @@ import discord
 import logging
 from datetime import datetime, timedelta
 import json
+import re
+from bs4 import BeautifulSoup
 from config import Config
 
 logger = logging.getLogger(__name__)
@@ -32,18 +34,98 @@ class ShipTracker:
     async def fetch_vesselfinder_data(self):
         """Fetch ship data from VesselFinder website"""
         session = await self.get_session()
-        url = f"https://www.vesselfinder.com/api/pro/ais/{self.ship_imo}"
         
+        # Try API first if key is available
+        if Config.VESSELFINDER_API_KEY:
+            url = f"https://www.vesselfinder.com/api/pro/ais/{self.ship_imo}"
+            try:
+                headers = {'Authorization': f'Bearer {Config.VESSELFINDER_API_KEY}'}
+                async with session.get(url, headers=headers) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        return data
+                    else:
+                        logger.warning(f"VesselFinder API returned status {response.status}")
+            except Exception as e:
+                logger.error(f"Error fetching VesselFinder API data: {e}")
+        
+        # Fallback to public page scraping
         try:
+            url = f"https://www.vesselfinder.com/vessels/details/{self.ship_imo}"
             async with session.get(url) as response:
                 if response.status == 200:
-                    data = await response.json()
-                    return data
+                    html = await response.text()
+                    return self.parse_vesselfinder_html(html)
                 else:
-                    logger.warning(f"VesselFinder API returned status {response.status}")
+                    logger.warning(f"VesselFinder website returned status {response.status}")
                     return None
         except Exception as e:
-            logger.error(f"Error fetching VesselFinder data: {e}")
+            logger.error(f"Error fetching VesselFinder website data: {e}")
+            return None
+    
+    def parse_vesselfinder_html(self, html):
+        """Parse VesselFinder HTML page for ship data"""
+        try:
+            soup = BeautifulSoup(html, 'html.parser')
+            
+            # Extract ship data from the HTML structure
+            data = {
+                'ship_name': self.ship_name,
+                'imo': self.ship_imo,
+                'mmsi': self.ship_mmsi,
+                'error': False
+            }
+            
+            # Try to find current position text
+            position_text = soup.find('div', class_='vessel-position')
+            if position_text:
+                text = position_text.get_text()
+                
+                # Extract coordinates using regex
+                lat_match = re.search(r'(\d+\.?\d*)[°\s]*([NS])', text)
+                lon_match = re.search(r'(\d+\.?\d*)[°\s]*([EW])', text)
+                
+                if lat_match and lon_match:
+                    lat = float(lat_match.group(1))
+                    if lat_match.group(2) == 'S':
+                        lat = -lat
+                    
+                    lon = float(lon_match.group(1))
+                    if lon_match.group(2) == 'W':
+                        lon = -lon
+                    
+                    data['latitude'] = lat
+                    data['longitude'] = lon
+            
+            # Extract speed
+            speed_match = re.search(r'(\d+\.?\d*)\s*knots?', html, re.IGNORECASE)
+            if speed_match:
+                data['speed'] = float(speed_match.group(1))
+            
+            # Extract course
+            course_match = re.search(r'Course[:\s]*(\d+\.?\d*)[°\s]', html, re.IGNORECASE)
+            if course_match:
+                data['course'] = float(course_match.group(1))
+            
+            # Extract destination
+            dest_match = re.search(r'destination[:\s]*([^<\n,]+)', html, re.IGNORECASE)
+            if dest_match:
+                data['destination'] = dest_match.group(1).strip()
+            
+            # Extract ETA
+            eta_match = re.search(r'ETA[:\s]*([^<\n,]+)', html, re.IGNORECASE)
+            if eta_match:
+                data['eta'] = eta_match.group(1).strip()
+                
+            # Extract navigation status
+            status_match = re.search(r'Navigation Status[:\s]*([^<\n,]+)', html, re.IGNORECASE)
+            if status_match:
+                data['status'] = status_match.group(1).strip()
+            
+            return data
+            
+        except Exception as e:
+            logger.error(f"Error parsing VesselFinder HTML: {e}")
             return None
     
     async def fetch_marinetraffic_data(self):

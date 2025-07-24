@@ -101,10 +101,24 @@ class ShipTracker:
             if eta_match:
                 data['eta'] = eta_match.group(1).strip()
             
-            # Extract current location - pattern: "at Baltic Sea reported"
-            location_match = re.search(r'position.*?is\s*at ([^r]+?) reported', text_content, re.IGNORECASE)
-            if location_match:
-                data['current_location'] = location_match.group(1).strip()
+            # Extract current location - multiple patterns
+            location_patterns = [
+                r'position.*?is\s*at ([^r]+?) reported',  # Original pattern
+                r'(?:is|was)\s*at\s*([^,.]+?)(?:\s*reported|\s*,|\s*\.)',  # General "at location"
+                r'current(?:ly)?\s*(?:in|at)\s*([^,.]+)',  # "currently in/at location"
+                r'(?:sailing|navigating|moving)\s*(?:in|through|at)\s*([^,.]+)',  # "sailing in location"
+            ]
+            
+            for pattern in location_patterns:
+                location_match = re.search(pattern, text_content, re.IGNORECASE)
+                if location_match:
+                    location = location_match.group(1).strip()
+                    # Clean up common artifacts
+                    location = re.sub(r'\s*reported.*', '', location)
+                    location = re.sub(r'\s*by AIS.*', '', location)
+                    if len(location) > 3 and location.lower() not in ['the', 'and', 'was', 'now']:
+                        data['current_location'] = location
+                        break
             
             # Extract last update time - pattern: "reported 1 min ago"
             time_match = re.search(r'reported ([^b]+?) by AIS', text_content, re.IGNORECASE)
@@ -179,8 +193,9 @@ class ShipTracker:
             }
             
             url = f"https://www.cruisemapper.com/?imo={self.ship_imo}"
+            session = await self.get_session()
             
-            async with self.session.get(url, headers=headers) as response:
+            async with session.get(url, headers=headers) as response:
                 if response.status == 200:
                     logger.info(f"Successfully fetched CruiseMapper page for IMO {self.ship_imo}")
                     return await response.text()

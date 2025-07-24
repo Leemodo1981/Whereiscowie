@@ -171,14 +171,41 @@ class ShipTracker:
             logger.error(f"Error fetching MarineTraffic data: {e}")
             return None
     
+    async def fetch_cruisemapper_data(self):
+        """Fetch ship data from CruiseMapper"""
+        try:
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            }
+            
+            url = f"https://www.cruisemapper.com/?imo={self.ship_imo}"
+            
+            async with self.session.get(url, headers=headers) as response:
+                if response.status == 200:
+                    logger.info(f"Successfully fetched CruiseMapper page for IMO {self.ship_imo}")
+                    return await response.text()
+                else:
+                    logger.warning(f"CruiseMapper returned status {response.status}")
+                    return None
+        except Exception as e:
+            logger.error(f"Error fetching CruiseMapper data: {e}")
+            return None
+    
     async def fetch_ais_data(self):
         """Fetch AIS data from multiple sources with fallback"""
-        # Try VesselFinder first (web scraping works, no need for API fallback)
+        # Try CruiseMapper first (has exact coordinates)
+        data = await self.fetch_cruisemapper_data()
+        if data:
+            parsed_data = self.parse_cruisemapper_data(data)
+            if parsed_data and not parsed_data.get('error'):
+                return parsed_data
+        
+        # Fallback to VesselFinder (web scraping works, good for general location)
         data = await self.fetch_vesselfinder_data()
-        if data and not data.get('error'):
+        if data:
             return self.parse_vesselfinder_data(data)
         
-        # Only show error if web scraping completely failed
+        # Only show error if all sources failed
         return {
             'error': True,
             'message': 'Unable to fetch real-time data from vessel tracking services',
@@ -244,6 +271,76 @@ class ShipTracker:
                 return {'error': True, 'message': 'No vessel data found'}
         except Exception as e:
             logger.error(f"Error parsing MarineTraffic data: {e}")
+            return {'error': True, 'message': 'Error parsing vessel data'}
+    
+    def parse_cruisemapper_data(self, html_content):
+        """Parse ship data from CruiseMapper HTML"""
+        try:
+            soup = BeautifulSoup(html_content, 'html.parser')
+            text_content = soup.get_text()
+            
+            data = {
+                'ship_name': self.ship_name,
+                'imo': self.ship_imo,
+                'mmsi': self.ship_mmsi
+            }
+            
+            # Extract coordinates from JavaScript config
+            coord_match = re.search(r'"lat":([\d.-]+),"lon":([\d.-]+)', html_content)
+            if coord_match:
+                lat = float(coord_match.group(1))
+                lon = float(coord_match.group(2))
+                data['latitude'] = lat
+                data['longitude'] = lon
+            
+            # Extract speed - pattern: "Speed17 kn" or similar
+            speed_match = re.search(r'Speed\s*([\d.]+)\s*kn', text_content, re.IGNORECASE)
+            if speed_match:
+                speed = float(speed_match.group(1))
+                data['speed'] = speed
+            
+            # Extract destination and ETA - pattern: "GB DVR > GI GIB ETAJuly 27, 05:00"
+            dest_eta_match = re.search(r'>\s*([A-Z]{2})\s*([A-Z]{3})\s*ETA([^S]+)', text_content)
+            if dest_eta_match:
+                # Map common port codes to readable names
+                port_codes = {
+                    'GIB': 'Gibraltar',
+                    'DVR': 'Dover',
+                    'SOU': 'Southampton',
+                    'LIS': 'Lisbon',
+                    'BAR': 'Barcelona'
+                }
+                dest_code = dest_eta_match.group(2)
+                data['destination'] = port_codes.get(dest_code, dest_code)
+                data['eta'] = dest_eta_match.group(3).strip()
+            
+            # Set status based on speed
+            speed_val = data.get('speed')
+            if speed_val and isinstance(speed_val, (int, float)) and speed_val > 0:
+                data['status'] = 'Under way'
+            else:
+                data['status'] = 'At anchor'
+            
+            # Extract current location name if available
+            lat_val = data.get('latitude')
+            lon_val = data.get('longitude')
+            if lat_val and lon_val and isinstance(lat_val, (int, float)) and isinstance(lon_val, (int, float)):
+                # Determine general area based on coordinates
+                if 40 < lat_val < 60 and -10 < lon_val < 30:  # European waters
+                    if 48 < lat_val < 52 and -6 < lon_val < 2:  # English Channel
+                        data['current_location'] = 'English Channel'
+                    elif 35 < lat_val < 37 and -6 < lon_val < -5:  # Gibraltar area
+                        data['current_location'] = 'Strait of Gibraltar'
+                    elif 54 < lat_val < 60 and 10 < lon_val < 30:  # Baltic Sea
+                        data['current_location'] = 'Baltic Sea'
+                    else:
+                        data['current_location'] = 'European Waters'
+            
+            logger.info(f"Parsed CruiseMapper data: speed={data.get('speed')}, dest={data.get('destination')}, eta={data.get('eta')}, coords=({data.get('latitude')}, {data.get('longitude')})")
+            return data
+            
+        except Exception as e:
+            logger.error(f"Error parsing CruiseMapper data: {e}")
             return {'error': True, 'message': 'Error parsing vessel data'}
     
     def format_coordinates(self, lat, lon, location=None):

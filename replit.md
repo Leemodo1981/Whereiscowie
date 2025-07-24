@@ -61,10 +61,13 @@ The application uses a **service-oriented architecture** where the bot acts as t
 - **Process**: Automatic data fetch via web scraping and update to configured channels
 - **Data Source**: VesselFinder website scraping (no API keys required)
 
-## Recent Changes (July 15, 2025)
-- Implemented web scraping functionality to extract real ship data from VesselFinder
+## Recent Changes (July 24, 2025)
+- Added CruiseMapper as primary data source with exact GPS coordinates
+- CruiseMapper provides precise latitude/longitude from JavaScript config
+- Automatic location detection (English Channel, Baltic Sea, Gibraltar, etc.)
+- Port code translation (GIB→Gibraltar, DVR→Dover, etc.)
+- Fallback to VesselFinder for backup data if CruiseMapper fails
 - Removed duplicate workflows causing "Data Unavailable" errors
-- Successfully extracting: speed, destination, ETA, current location (Baltic Sea)
 - Bot now provides real-time tracking data without requiring paid API keys
 
 ## External Dependencies

@@ -68,7 +68,10 @@ The application uses a **service-oriented architecture** where the bot acts as t
 - Port code translation (GIB→Gibraltar, DVR→Dover, etc.)
 - Fallback to VesselFinder for backup data if CruiseMapper fails
 - Removed duplicate workflows causing "Data Unavailable" errors
-- Bot now provides real-time tracking data without requiring paid API keys
+- Removed course display from ship tracking output (user preference)
+- Added live map screenshot functionality using Selenium + Chrome
+- Bot now includes map images showing ship's exact location
+- Screenshots are automatically generated and cleaned up after display
 
 ## External Dependencies
 

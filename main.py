@@ -67,8 +67,16 @@ class WhereIsCowieBot(commands.Bot):
         """Send periodic updates about the ship at 06:00, 12:00, and 16:00 UTC"""
         if self.auto_update_channel:
             try:
-                embed = await self.ship_tracker.get_ship_status_embed()
-                await self.auto_update_channel.send("🚢 **Scheduled Spirit of Adventure Update**", embed=embed)
+                result = await self.ship_tracker.get_ship_status_embed()
+                
+                # Handle both single embed and embed+file returns
+                if isinstance(result, tuple):
+                    embed, file = result
+                    await self.auto_update_channel.send("🚢 **Scheduled Spirit of Adventure Update**", embed=embed, file=file)
+                else:
+                    embed = result
+                    await self.auto_update_channel.send("🚢 **Scheduled Spirit of Adventure Update**", embed=embed)
+                
                 logger.info("Sent scheduled update")
             except Exception as e:
                 logger.error(f"Error sending scheduled update: {e}")
@@ -85,8 +93,15 @@ async def get_ship_status(ctx):
     # Send typing indicator
     async with ctx.typing():
         try:
-            embed = await bot.ship_tracker.get_ship_status_embed()
-            await ctx.send(embed=embed)
+            result = await bot.ship_tracker.get_ship_status_embed()
+            
+            # Handle both single embed and embed+file returns
+            if isinstance(result, tuple):
+                embed, file = result
+                await ctx.send(embed=embed, file=file)
+            else:
+                embed = result
+                await ctx.send(embed=embed)
             
         except Exception as e:
             logger.error(f"Error getting ship status: {e}")

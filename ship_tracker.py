@@ -4,9 +4,11 @@ import discord
 import logging
 from datetime import datetime, timedelta
 import json
+import os
 import re
 from bs4 import BeautifulSoup
 from config import Config
+from map_screenshot import MapScreenshotter
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +18,7 @@ class ShipTracker:
         self.ship_mmsi = "232026551"
         self.ship_name = "SPIRIT OF ADVENTURE"
         self.session = None
+        self.map_screenshotter = MapScreenshotter()
         
     async def get_session(self):
         """Get or create aiohttp session"""
@@ -544,7 +547,26 @@ class ShipTracker:
         else:
             embed.set_footer(text="Data from vessel tracking APIs")
         
-        # Add map link if coordinates are available
+        # Add map screenshot if coordinates are available
+        lat = ship_data.get('latitude')
+        lon = ship_data.get('longitude')
+        if lat and lon:
+            try:
+                # Take screenshot of map
+                screenshot_path = await self.map_screenshotter.get_ship_map_screenshot(lat, lon, self.ship_name)
+                if screenshot_path and os.path.exists(screenshot_path):
+                    # Attach the screenshot to Discord
+                    file = discord.File(screenshot_path, filename="ship_location_map.png")
+                    embed.set_image(url="attachment://ship_location_map.png")
+                    
+                    # Clean up the temporary file after a delay
+                    asyncio.create_task(self._cleanup_temp_file(screenshot_path))
+                    
+                    return embed, file
+            except Exception as e:
+                logger.error(f"Error creating map screenshot: {e}")
+        
+        # Add map link if coordinates are available (fallback)
         if ship_data.get('latitude') and ship_data.get('longitude'):
             map_url = f"https://www.vesselfinder.com/?imo={self.ship_imo}"
             embed.add_field(
@@ -554,6 +576,16 @@ class ShipTracker:
             )
         
         return embed
+
+    async def _cleanup_temp_file(self, file_path):
+        """Clean up temporary file after delay"""
+        try:
+            await asyncio.sleep(10)  # Wait 10 seconds before cleanup
+            if os.path.exists(file_path):
+                os.remove(file_path)
+                logger.info(f"Cleaned up temporary file: {file_path}")
+        except Exception as e:
+            logger.error(f"Error cleaning up temp file {file_path}: {e}")
 
     def __del__(self):
         """Cleanup when object is destroyed"""

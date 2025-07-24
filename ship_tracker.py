@@ -479,19 +479,12 @@ class ShipTracker:
             inline=True
         )
         
-        # Speed and course
+        # Speed only
         speed = self.format_speed(ship_data.get('speed'))
-        course = self.format_course(ship_data.get('course'))
         
         embed.add_field(
             name="💨 Speed",
             value=speed,
-            inline=True
-        )
-        
-        embed.add_field(
-            name="🧭 Course",
-            value=course,
             inline=True
         )
         

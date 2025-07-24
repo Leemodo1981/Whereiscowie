@@ -1,0 +1,78 @@
+# WhereIsCowie Bot - Deployment Package
+
+## Files to Copy to Your Server
+
+Copy these files to `/opt/whereiscowie/` on your Ubuntu server:
+
+### Core Bot Files:
+- main.py
+- ship_tracker.py
+- config.py
+- map_screenshot.py
+
+### Configuration Files:
+- .env.example (rename to .env and add your Discord token)
+
+### Installation Files:
+- install_ubuntu.md (detailed instructions)
+- install.sh (automated installation script)
+
+## Quick Deployment Commands
+
+1. **Run the installation script:**
+   ```bash
+   sudo chmod +x install.sh
+   sudo ./install.sh
+   ```
+
+2. **Copy bot files:**
+   ```bash
+   sudo cp main.py ship_tracker.py config.py map_screenshot.py /opt/whereiscowie/
+   sudo chown cowiebot:cowiebot /opt/whereiscowie/*.py
+   ```
+
+3. **Configure Discord token:**
+   ```bash
+   sudo nano /opt/whereiscowie/.env
+   # Add: DISCORD_BOT_TOKEN=your_actual_token_here
+   ```
+
+4. **Start the bot:**
+   ```bash
+   sudo systemctl enable --now whereiscowie
+   sudo systemctl status whereiscowie
+   ```
+
+## Discord Bot Setup
+
+1. Go to https://discord.com/developers/applications
+2. Create a new application and bot
+3. Enable "Message Content Intent" in Bot settings
+4. Copy the bot token to your .env file
+5. Generate invite URL with these permissions:
+   - Send Messages
+   - Embed Links
+   - Attach Files
+   - Read Message History
+
+## Bot Commands
+
+- `!cowie` - Get ship status with live map
+- `!track` - Enable auto-updates (admin only)
+- `!stop_track` - Disable auto-updates (admin only)
+- `!commands` - List all commands
+
+The bot automatically sends updates at 06:00, 12:00, and 16:00 UTC daily.
+
+## Monitoring
+
+```bash
+# View live logs
+sudo journalctl -u whereiscowie -f
+
+# Restart if needed
+sudo systemctl restart whereiscowie
+
+# Check service status
+sudo systemctl status whereiscowie
+```
